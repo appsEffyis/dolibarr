@@ -13,78 +13,87 @@ class ActionsLodinpay
     // ======================================================
     // CALLED ON EVERY ACTION (INVOICE CARD CONTEXT)
     // ======================================================
-    public function doActions($parameters, &$object, &$action, $hookmanager)
-    {
-        global $conf, $db, $user, $langs;
+public function doActions($parameters, &$object, &$action, $hookmanager)
+{
+    global $conf, $db, $user, $langs;
 
-        // 🔍 Always log action
-        dol_syslog("LODINGPAY doActions action=".$action, LOG_INFO);
+    dol_syslog("LODINGPAY doActions action=".$action, LOG_INFO);
 
-        if (!is_object($object) || $object->element !== 'facture') {
-            return 0;
-        }
+    if (!is_object($object) || $object->element !== 'facture') {
+        return 0;
+    }
 
-        $clientId = $conf->global->LODINPAY_CLIENT_ID ?? '';
-        $secret   = $conf->global->LODINPAY_CLIENT_SECRET ?? '';
+    $clientId = $conf->global->LODINPAY_CLIENT_ID ?? '';
+    $secret   = $conf->global->LODINPAY_CLIENT_SECRET ?? '';
 
-        if (!$clientId || !$secret) {
-            dol_syslog("LODINGPAY missing credentials", LOG_WARNING);
-            return 0;
-        }
+    if (!$clientId || !$secret) {
+        dol_syslog("LODINGPAY missing credentials", LOG_WARNING);
+        return 0;
+    }
 
-        // ======================================================
-        // 🔁 MANUAL SYNC BUTTON
-        // ======================================================
-        if ($action === 'lodinpay_sync') {
-            try {
-                dol_syslog("LODINGPAY sync status for ".$object->ref, LOG_INFO);
+    // ======================================================
+    // 🔁 MANUAL SYNC BUTTON
+    // ======================================================
+    if ($action === 'lodinpay_sync') {
+        try {
+            dol_syslog("LODINGPAY sync status for ".$object->ref, LOG_INFO);
 
-                $statusResponse = $this->syncPaymentStatus($object, $clientId, $secret);
-                $status = $statusResponse['status'] ?? null;
+            $statusResponse = $this->syncPaymentStatus($object, $clientId, $secret);
+            $status = $statusResponse['status'] ?? null;
 
-                dol_syslog("LODINGPAY STATUS=".$status, LOG_INFO);
+            dol_syslog("LODINGPAY STATUS=".$status, LOG_INFO);
 
-                if ($status === 'Completed') {
-                    $this->markInvoicePaid($object);
-                    setEventMessage("Invoice marked as PAID (LodinPay)");
-                } else {
-                    setEventMessage("LodinPay status: ".$status);
-                }
-
-            } catch (Exception $e) {
-                dol_syslog("LODINGPAY SYNC ERROR ".$e->getMessage(), LOG_ERR);
-                setEventMessage($e->getMessage(), 'errors');
+            if ($status === 'Completed') {
+                $this->markInvoicePaid($object);
+                setEventMessage("Invoice marked as PAID (LodinPay)");
+            } else {
+                setEventMessage("LodinPay status: ".$status);
             }
 
-            return 0;
+        } catch (Exception $e) {
+            dol_syslog("LODINGPAY SYNC ERROR ".$e->getMessage(), LOG_ERR);
+            setEventMessage($e->getMessage(), 'errors');
         }
 
-        // ======================================================
-        // ✅ ON INVOICE VALIDATION
-        // ======================================================
-        if ($action !== 'confirm_valid') {
-            return 0;
-        }
+        return 0;
+    }
 
-        // Prevent duplicate processing
-        if (!empty($object->lodinpay_order_id)) {
-            dol_syslog("LODINGPAY already processed ".$object->ref, LOG_INFO);
-            return 0;
-        }
+    // ======================================================
+    // ✅ ON INVOICE VALIDATION ONLY
+    // ======================================================
+    if ($action !== 'confirm_valid') {
+        return 0;
+    }
 
+    // ✅ FIX 1 — Recharger l'objet pour avoir le vrai numéro (pas PROV...)
+    $object->fetch($object->id);
+    dol_syslog("LODINGPAY ref after fetch: ".$object->ref, LOG_INFO);
+
+    // ✅ FIX 2 — Vérifier en DB si déjà traité
+    $sqlCheck = "SELECT lodinpay_order_id FROM ".MAIN_DB_PREFIX."facture 
+                 WHERE rowid = ".((int) $object->id)."
+                 AND lodinpay_order_id IS NOT NULL 
+                 AND lodinpay_order_id != ''";
+    $resCheck = $db->query($sqlCheck);
+    if ($resCheck && $db->num_rows($resCheck) > 0) {
+        dol_syslog("LODINGPAY already processed ".$object->ref.", skipping", LOG_INFO);
+        return 0;
+    }
+
+    try {
+        // ===============================
+        // 1️⃣ GENERATE RTP
+        // ===============================
+        dol_syslog("LODINGPAY generating RTP for ".$object->ref, LOG_INFO);
+
+        $rtp = $this->generateRTP($object, $clientId, $secret);
+
+        dol_syslog("LODINGPAY RTP RESPONSE: ".json_encode($rtp), LOG_DEBUG);
+
+        // ===============================
+        // 2️⃣ CREATE INVOICE IN LODINPAY
+        // ===============================
         try {
-            // ===============================
-            // 1️⃣ GENERATE RTP
-            // ===============================
-            dol_syslog("LODINGPAY generating RTP for ".$object->ref, LOG_INFO);
-
-            $rtp = $this->generateRTP($object, $clientId, $secret);
-
-            dol_syslog("LODINGPAY RTP RESPONSE: ".json_encode($rtp), LOG_DEBUG);
-
-            // ===============================
-            // 2️⃣ CREATE INVOICE IN LODINPAY
-            // ===============================
             $invoiceResponse = $this->createInvoice(
                 $object,
                 $clientId,
@@ -112,24 +121,34 @@ class ActionsLodinpay
 
             dol_syslog("LODINGPAY PDF attached for ".$object->ref, LOG_INFO);
 
-            // ===============================
-            // 4️⃣ SAVE DATA IN DOLIBARR
-            // ===============================
-            $sql = "UPDATE ".MAIN_DB_PREFIX."facture SET
-                        lodinpay_payment_link = '".$db->escape($rtp['url'])."',
-                        lodinpay_order_id = '".$db->escape($rtp['orderId'])."'
-                    WHERE rowid = ".((int) $object->id);
-
-            $db->query($sql);
-            
-
         } catch (Exception $e) {
-            dol_syslog("LODINGPAY ERROR ".$e->getMessage(), LOG_ERR);
-            setEventMessage("LodinPay error: ".$e->getMessage(), 'errors');
+            // ✅ "already exists" n'est pas bloquant — le lien RTP est déjà créé
+            if (strpos($e->getMessage(), 'already exists') !== false) {
+                dol_syslog("LODINGPAY invoice already exists in backend, continuing", LOG_WARNING);
+            } else {
+                throw $e; // Relancer les vraies erreurs
+            }
         }
 
-        return 0;
+        // ===============================
+        // 4️⃣ SAVE DATA IN DOLIBARR (toujours exécuté)
+        // ===============================
+        $sql = "UPDATE ".MAIN_DB_PREFIX."facture SET
+                    lodinpay_payment_link = '".$db->escape($rtp['url'])."',
+                    lodinpay_order_id     = '".$db->escape($rtp['orderId'])."'
+                WHERE rowid = ".((int) $object->id);
+
+        $db->query($sql);
+
+        dol_syslog("LODINGPAY saved orderId=".$rtp['orderId']." for ".$object->ref, LOG_INFO);
+
+    } catch (Exception $e) {
+        dol_syslog("LODINGPAY ERROR ".$e->getMessage(), LOG_ERR);
+        setEventMessage("LodinPay error: ".$e->getMessage(), 'errors');
     }
+
+    return 0;
+}
 
 
     // ======================================================
@@ -400,7 +419,7 @@ class ActionsLodinpay
             LOG_INFO
         );
     }
-    public function beforePDFCreation($parameters, &$object, &$action, $hookmanager)
+public function beforePDFCreation($parameters, &$object, &$action, $hookmanager)
     {
         global $db;
 

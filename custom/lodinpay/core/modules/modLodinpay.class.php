@@ -35,7 +35,7 @@ class modLodinpay extends DolibarrModules
 
         $this->module_parts = array(
             'models' => array('pdf'),
-            'hooks'  => array('invoicecard', 'pdfgeneration')
+            'hooks' => array('invoicecard', 'pdfgeneration')
         );
 
         $this->picto = 'payment';

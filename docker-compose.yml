@@ -1,6 +1,8 @@
 services:
     mariadb:
         image: mariadb:10.11
+        ports:
+         - "3307:3306"
         environment:
             MYSQL_ROOT_PASSWORD: root
             MYSQL_DATABASE: dolidb
@@ -10,6 +12,18 @@ services:
             # Les données de la base seront dans un dossier "db_data" local
             - ./db_data:/var/lib/mysql
 
+
+    phpmyadmin:
+        image: phpmyadmin:latest
+        restart: always
+        ports:
+            - "8082:80"
+        environment:
+            PMA_HOST: mariadb
+            MYSQL_ROOT_PASSWORD: root
+        depends_on:
+            - mariadb
+   
     web:
         image: dolibarr/dolibarr:latest
         environment:
