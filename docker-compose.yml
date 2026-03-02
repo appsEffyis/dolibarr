@@ -1,0 +1,34 @@
+services:
+    mariadb:
+        image: mariadb:10.11
+        environment:
+            MYSQL_ROOT_PASSWORD: root
+            MYSQL_DATABASE: dolidb
+            MYSQL_USER: dolidbuser
+            MYSQL_PASSWORD: dolidbpass
+        volumes:
+            # Les données de la base seront dans un dossier "db_data" local
+            - ./db_data:/var/lib/mysql
+
+    web:
+        image: dolibarr/dolibarr:latest
+        environment:
+            DOLI_INIT_DEMO: 0
+            DOLI_DB_HOST: mariadb
+            DOLI_DB_NAME: dolidb
+            DOLI_DB_USER: dolidbuser
+            DOLI_DB_PASSWORD: dolidbpass
+            # Mets localhost:8081 pour que Dolibarr sache où il est
+            DOLI_URL_ROOT: "http://localhost:8081"
+            DOLI_ADMIN_LOGIN: "admin"
+            DOLI_ADMIN_PASSWORD: "admin"
+            DOLI_COMPANY_NAME: "Effyis LodinPay"
+        ports:
+            - "8081:80"
+        depends_on:
+            - mariadb
+        volumes:
+            # Tes documents (factures générées)
+            - ./documents:/var/www/documents
+            # TON CODE (ton module LodinPay ira ici)
+            - ./custom:/var/www/html/custom

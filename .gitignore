@@ -1,0 +1,16 @@
+# Database
+db_data/
+*.frm
+*.ibd
+aria_log*
+*.log
+
+# Dolibarr config
+conf.php
+
+# Docker
+*.cnf
+
+# Cache
+documents/
+temp/
