@@ -48,12 +48,12 @@ class pdf_lodinpay extends ModelePDFFactures
 
         $outputlangs->loadLangs(['main', 'bills', 'dict', 'companies']);
 
-        // ✅ FIX 1 — Charger le tiers (client)
+        // ✅ Charger le tiers (client)
         if (empty($object->thirdparty) || empty($object->thirdparty->name)) {
             $object->fetch_thirdparty();
         }
 
-        // ✅ FIX 2 — Créer le dossier en PREMIER
+        // ✅ Créer le dossier en PREMIER
         $fileDir = $conf->facture->dir_output.'/'.$object->ref.'/';
         dol_mkdir($fileDir);
 
@@ -67,13 +67,12 @@ class pdf_lodinpay extends ModelePDFFactures
 
         dol_syslog("LODINPAY PDF link=".($lodinpayLink ?: 'EMPTY')." for ".$object->ref, LOG_INFO);
 
-        // ✅ FIX 3 — Télécharger QR via cURL (plus fiable que file_get_contents dans Docker)
+        // ✅ Télécharger QR via cURL
         $qrTmpPath = '';
         if (!empty($lodinpayLink)) {
             $qrApiUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='.urlencode($lodinpayLink);
             $qrTmpPath = $fileDir.$object->ref.'_qr.png';
 
-            // Essai 1 : cURL
             if (function_exists('curl_init')) {
                 $ch = curl_init($qrApiUrl);
                 curl_setopt_array($ch, [
@@ -82,7 +81,7 @@ class pdf_lodinpay extends ModelePDFFactures
                     CURLOPT_TIMEOUT        => 10,
                     CURLOPT_SSL_VERIFYPEER => false,
                 ]);
-                $qrData = curl_exec($ch);
+                $qrData   = curl_exec($ch);
                 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 curl_close($ch);
 
@@ -92,15 +91,12 @@ class pdf_lodinpay extends ModelePDFFactures
                     $qrTmpPath = '';
                     dol_syslog("LODINPAY QR cURL failed httpCode=".$httpCode, LOG_WARNING);
                 }
-            }
-            // Essai 2 : file_get_contents si cURL échoue
-            elseif (ini_get('allow_url_fopen')) {
+            } elseif (ini_get('allow_url_fopen')) {
                 $qrData = @file_get_contents($qrApiUrl);
                 if ($qrData) {
                     file_put_contents($qrTmpPath, $qrData);
                 } else {
                     $qrTmpPath = '';
-                    dol_syslog("LODINPAY QR file_get_contents failed", LOG_WARNING);
                 }
             } else {
                 $qrTmpPath = '';
@@ -122,6 +118,12 @@ class pdf_lodinpay extends ModelePDFFactures
         $nexY = $this->_drawLines($pdf, $object, $outputlangs);
         $nexY = $this->_drawTotals($pdf, $object, $outputlangs, $nexY);
 
+        // ✅ LIEN DE PAIEMENT texte (gauche, bas de page)
+        if (!empty($lodinpayLink)) {
+            $this->_drawPaymentLink($pdf, $lodinpayLink);
+        }
+
+        // ✅ QR CODE (droite, bas de page)
         if (!empty($qrTmpPath) && file_exists($qrTmpPath)) {
             $this->_drawQRCode($pdf, $qrTmpPath);
             @unlink($qrTmpPath);
@@ -146,7 +148,6 @@ class pdf_lodinpay extends ModelePDFFactures
     {
         pdf_pagehead($pdf, $outputlangs, $this->page_hauteur);
 
-        // Logo ou nom société
         $logo = $conf->mycompany->dir_output.'/logos/'.$mysoc->logo;
         if (!empty($mysoc->logo) && file_exists($logo)) {
             $pdf->Image($logo, $this->marge_gauche, $this->marge_haute, 40, 0, '', '', '', false, 300);
@@ -157,13 +158,11 @@ class pdf_lodinpay extends ModelePDFFactures
             $pdf->Cell(80, 6, $outputlangs->convToOutputCharset($mysoc->name), 0, 1, 'L');
         }
 
-        // Titre
         $pdf->SetFont('', 'B', 14);
         $pdf->SetTextColor(0, 0, 60);
         $pdf->SetXY(120, $this->marge_haute);
         $pdf->Cell(80, 7, $outputlangs->transnoentities('Invoice').' '.$object->ref, 0, 1, 'R');
 
-        // Dates
         $pdf->SetFont('', '', 8);
         $pdf->SetTextColor(80, 80, 80);
         $pdf->SetXY(120, $this->marge_haute + 8);
@@ -173,7 +172,6 @@ class pdf_lodinpay extends ModelePDFFactures
             $outputlangs->transnoentities('CustomerCode').' : '.($object->thirdparty->code_client ?? ''),
         0, 'R');
 
-        // Émetteur
         $pdf->SetFont('', 'B', 8);
         $pdf->SetTextColor(0, 0, 0);
         $pdf->SetXY($this->marge_gauche, 48);
@@ -185,7 +183,6 @@ class pdf_lodinpay extends ModelePDFFactures
             $mysoc->name."\n".($mysoc->address ?? '')."\n".($mysoc->zip ?? '').' '.($mysoc->town ?? ''),
         1, 'L', true);
 
-        // Destinataire
         $pdf->SetFont('', 'B', 8);
         $pdf->SetXY(110, 48);
         $pdf->Cell(90, 5, $outputlangs->transnoentities('BillTo'), 0, 1, 'L');
@@ -197,7 +194,6 @@ class pdf_lodinpay extends ModelePDFFactures
             ($object->thirdparty->zip ?? '').' '.($object->thirdparty->town ?? ''),
         1, 'L');
 
-        // En-têtes colonnes
         $pdf->SetFont('', 'B', 8);
         $pdf->SetFillColor(40, 60, 120);
         $pdf->SetTextColor(255, 255, 255);
@@ -281,7 +277,38 @@ class pdf_lodinpay extends ModelePDFFactures
     }
 
     // ======================================================
-    // QR CODE — BAS À DROITE
+    // ✅ LIEN DE PAIEMENT — bas gauche
+    // ======================================================
+    private function _drawPaymentLink(&$pdf, $lodinpayLink)
+    {
+        // Positionné juste au-dessus du pied de page, à gauche
+        // Le QR code est à droite (x=162), donc on utilise x=10 largeur=140
+        $yLink = $this->page_hauteur - $this->marge_basse - 34;
+
+        // Fond bleu clair + bordure
+        $pdf->SetFillColor(235, 240, 255);
+        $pdf->SetDrawColor(40, 60, 120);
+        $pdf->SetLineWidth(0.3);
+        $pdf->RoundedRect($this->marge_gauche, $yLink, 140, 16, 2, '1111', 'DF');
+
+        // Label
+        $pdf->SetFont('', 'B', 7);
+        $pdf->SetTextColor(40, 60, 120);
+        $pdf->SetXY($this->marge_gauche + 3, $yLink + 2);
+        $pdf->Cell(134, 4, 'Lien de paiement LodinPay :', 0, 1, 'L');
+
+        // URL — cliquable dans le PDF
+        $pdf->SetFont('', 'I', 6.5);
+        $pdf->SetTextColor(0, 70, 180);
+        $pdf->SetXY($this->marge_gauche + 3, $yLink + 7);
+        $pdf->Cell(134, 5, $lodinpayLink, 0, 0, 'L', false, $lodinpayLink);
+
+        $pdf->SetTextColor(0, 0, 0);
+        $pdf->SetLineWidth(0.2);
+    }
+
+    // ======================================================
+    // QR CODE — bas droite
     // ======================================================
     private function _drawQRCode(&$pdf, $qrTmpPath)
     {
