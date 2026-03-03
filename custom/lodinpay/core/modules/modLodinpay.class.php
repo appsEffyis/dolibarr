@@ -48,6 +48,20 @@ class modLodinpay extends DolibarrModules
         ];
 
 
+
+        $this->const = [
+            [
+                'FACTURE_ADDON_PDF',   // nom de la constante
+                'chaine',              // type
+                'lodinpay',            // valeur
+                'Default PDF model set by LodinPay',  // note
+                1,                     // visible
+                'allentities',         // entity
+                1,                     // deleteOnUninstall (remet à vide à la désactivation)
+            ],
+        ];  
+
+
         $this->picto = 'payment';
 
         // Rights
@@ -64,10 +78,72 @@ class modLodinpay extends DolibarrModules
     }
 
     public function init($options = '')
-     {
-            $result = $this->_load_tables('/lodinpay/sql/');
-            if ($result < 0) return -1;
+    {
+        // ✅ Chemin correct vers le SQL
+        $result = $this->_load_tables('/lodinpay/sql/');
+        if ($result < 0) return -1;
 
-            return parent::init($options);
+        // ✅ Insérer le modèle dans llx_document_model si absent
+        $this->_registerPDFModel();
+
+        return parent::init($options);
+    }
+
+    public function remove($options = '')
+    {
+        // Restaurer sponge comme modèle par défaut à la désactivation
+        $this->_restoreDefaultPDFModel();
+        return parent::remove($options);
+    }
+
+    // ======================================================
+    // Enregistre le modèle lodinpay dans llx_document_model
+    // ======================================================
+    private function _registerPDFModel()
+    {
+        global $conf;
+
+        $entity = (int)($conf->entity ?? 1);
+
+        // Vérifier si déjà enregistré
+        $sql = "SELECT rowid FROM ".MAIN_DB_PREFIX."document_model
+                WHERE nom = 'lodinpay'
+                AND type = 'invoice'
+                AND entity = ".$entity;
+
+        $res = $this->db->query($sql);
+
+        if ($res && $this->db->num_rows($res) === 0) {
+            $sqlInsert = "INSERT INTO ".MAIN_DB_PREFIX."document_model
+                          (nom, type, entity)
+                          VALUES ('lodinpay', 'invoice', ".$entity.")";
+            $this->db->query($sqlInsert);
+            dol_syslog("LODINPAY: model registered in document_model", LOG_INFO);
         }
+    }
+
+    // ======================================================
+    // Restaure sponge à la désactivation
+    // ======================================================
+    private function _restoreDefaultPDFModel()
+    {
+        global $conf;
+
+        $entity = (int)($conf->entity ?? 1);
+
+        // Remettre sponge comme défaut
+        $this->db->query(
+            "DELETE FROM ".MAIN_DB_PREFIX."const
+             WHERE name = 'FACTURE_ADDON_PDF'
+             AND entity = ".$entity
+        );
+
+        $this->db->query(
+            "INSERT INTO ".MAIN_DB_PREFIX."const
+             (name, value, type, visible, note, entity)
+             VALUES ('FACTURE_ADDON_PDF', 'sponge', 'chaine', 0, 'Restored by LodinPay uninstall', ".$entity.")"
+        );
+
+        dol_syslog("LODINPAY: PDF model restored to sponge", LOG_INFO);
+    }
 }
