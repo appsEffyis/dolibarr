@@ -439,7 +439,9 @@ public function formObjectOptions($parameters, &$object, &$action, $hookmanager)
             LOG_INFO
         );
     }
-public function beforePDFCreation($parameters, &$object, &$action, $hookmanager)
+
+
+    public function beforePDFCreation($parameters, &$object, &$action, $hookmanager)
 {
     global $db;
 
@@ -453,29 +455,135 @@ public function beforePDFCreation($parameters, &$object, &$action, $hookmanager)
 
     $resql = $db->query($sql);
     if ($resql && ($row = $db->fetch_object($resql))) {
-
         if (!empty($row->lodinpay_payment_link)) {
 
-            // ✅ AJOUT — Télécharger le QR code et l'encoder en base64
+            // ✅ Stocker le lien dans un global pour afterPDFCreation
+            $GLOBALS['lodinpay_payment_link_for_pdf'] = $row->lodinpay_payment_link;
+            $GLOBALS['lodinpay_invoice_ref']           = $object->ref;
+
+            // Télécharger le QR code
             $qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='
                 . urlencode($row->lodinpay_payment_link);
 
             $qrImageData = @file_get_contents($qrApiUrl);
 
             if ($qrImageData !== false) {
-                // Sauvegarder le QR code en fichier temporaire
-                $tmpQrPath = DOL_DATA_ROOT.'/facture/'.$object->ref.'/'.$object->ref.'_qr.png';
-                file_put_contents($tmpQrPath, $qrImageData);
-
-                // Stocker le chemin dans l'objet pour usage ultérieur (hook PDF)
-                $object->lodinpay_qr_path = $tmpQrPath;
+                $tmpDir  = DOL_DATA_ROOT.'/facture/'.$object->ref.'/';
+                dol_mkdir($tmpDir);
+                $tmpPath = $tmpDir.$object->ref.'_qr.png';
+                file_put_contents($tmpPath, $qrImageData);
+                $GLOBALS['lodinpay_qr_tmp_path'] = $tmpPath;
             }
-
-            // Ajouter le lien en note publique (fallback texte)
-            $object->note_public .= "\n\n"
-                ."Payer en ligne : ".$row->lodinpay_payment_link;
         }
     }
+
+    return 0;
+}
+
+public function afterPDFCreation($parameters, &$object, &$action, $hookmanager)
+{
+    global $db;
+
+    if (empty($GLOBALS['lodinpay_qr_tmp_path'])) {
+        return 0;
+    }
+
+    $qrPath     = $GLOBALS['lodinpay_qr_tmp_path'];
+    $invoiceRef = $GLOBALS['lodinpay_invoice_ref'] ?? '';
+
+    if (!file_exists($qrPath) || !$invoiceRef) {
+        return 0;
+    }
+
+    // ✅ Chemin du PDF généré
+    $pdfPath = DOL_DATA_ROOT.'/facture/'.$invoiceRef.'/'.$invoiceRef.'.pdf';
+
+    if (!file_exists($pdfPath)) {
+        dol_syslog("LODINGPAY afterPDF: PDF not found at ".$pdfPath, LOG_WARNING);
+        return 0;
+    }
+
+        // ✅ ICI — Détection FPDI avant le try
+    $fpdiPaths = [
+        DOL_DOCUMENT_ROOT.'/includes/tcpdf/tfpdf.php',
+        DOL_DOCUMENT_ROOT.'/includes/fpdi/fpdi.php',
+        DOL_DOCUMENT_ROOT.'/includes/fpdi/src/autoload.php',
+    ];
+    foreach ($fpdiPaths as $path) {
+        if (file_exists($path)) { require_once $path; break; }
+    }
+
+    try {
+        // ✅ Charger FPDI (inclus dans Dolibarr via TCPDF)
+        require_once DOL_DOCUMENT_ROOT.'/core/lib/pdf.lib.php';
+
+        // Utiliser TCPDF + FPDI pour ajouter le QR sur le PDF existant
+        $fpdi = new TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
+        $fpdi->setPrintHeader(false);
+        $fpdi->setPrintFooter(false);
+
+        // Lire le PDF existant page par page via fpdi
+        // Dolibarr embarque setasign/fpdi
+        $fpdiLib = DOL_DOCUMENT_ROOT.'/includes/tcpdf/tcpdf.php';
+        
+        // ✅ Utiliser la classe native Dolibarr
+        $pdf = pdf_getInstance('A4');
+        
+        // Copier le PDF original vers un fichier temporaire
+        $tmpPdf = $pdfPath.'.tmp.pdf';
+        copy($pdfPath, $tmpPdf);
+
+        // Ouvrir avec FPDI
+        if (class_exists('FPDI')) {
+            $fpdi2 = new FPDI();
+        } elseif (class_exists('setasign\Fpdi\Fpdi')) {
+            $fpdi2 = new \setasign\Fpdi\Fpdi();
+        } else {
+            // Fallback : image ajoutée via ImageMagick si disponible
+            dol_syslog("LODINGPAY FPDI class not found", LOG_WARNING);
+            @unlink($qrPath);
+            unset($GLOBALS['lodinpay_qr_tmp_path'], $GLOBALS['lodinpay_invoice_ref']);
+            return 0;
+        }
+
+        $pageCount = $fpdi2->setSourceFile($tmpPdf);
+
+        for ($i = 1; $i <= $pageCount; $i++) {
+            $tplId = $fpdi2->importPage($i);
+            $size  = $fpdi2->getTemplateSize($tplId);
+            $fpdi2->AddPage($size['orientation'], [$size['width'], $size['height']]);
+            $fpdi2->useTemplate($tplId);
+
+            // ✅ Ajouter le QR sur la DERNIÈRE page seulement
+            if ($i === $pageCount) {
+                // Position bas à droite (A4 = 210x297mm)
+                $qrSize = 35;
+                $qrX    = 165; // 210 - 35 - 10 (marge droite)
+                $qrY    = 248; // 297 - 35 - 14 (marge bas)
+
+                $fpdi2->Image($qrPath, $qrX, $qrY, $qrSize, $qrSize, 'PNG');
+
+                // Label sous le QR
+                $fpdi2->SetFont('helvetica', 'I', 6);
+                $fpdi2->SetTextColor(100, 100, 100);
+                $fpdi2->SetXY($qrX, $qrY + $qrSize + 1);
+                $fpdi2->Cell($qrSize, 3, 'Payer via LodinPay', 0, 0, 'C');
+            }
+        }
+
+        // ✅ Écraser le PDF original avec la version enrichie
+        $fpdi2->Output($pdfPath, 'F');
+
+        dol_syslog("LODINGPAY QR code injecté dans ".$pdfPath, LOG_INFO);
+
+    } catch (Exception $e) {
+        dol_syslog("LODINGPAY afterPDF ERROR: ".$e->getMessage(), LOG_ERR);
+    }
+
+    // Nettoyage
+    @unlink($qrPath);
+    @unlink($tmpPdf ?? '');
+    unset($GLOBALS['lodinpay_qr_tmp_path'], $GLOBALS['lodinpay_invoice_ref'], $GLOBALS['lodinpay_payment_link_for_pdf']);
 
     return 0;
 }

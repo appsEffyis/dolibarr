@@ -26,17 +26,27 @@ class modLodinpay extends DolibarrModules
         $this->editor_url    = 'https://www.lodinpay.io';
 
         $this->depends = array('modFacture');
-        $this->dirs    = array('/lodinpay');
+       // $this->dirs    = array('/lodinpay');
 
         $this->phpmin  = array(7, 4);
         $this->need_dolibarr_version = array(17, 0);
 
         $this->config_page_url = array("setup.php@lodinpay");
 
-        $this->module_parts = array(
-            'models' => array('pdf'),
-            'hooks' => array('invoicecard', 'pdfgeneration')
-        );
+        $this->dirs = [
+            '/lodinpay',              // pour SQL (init)
+            ['/facture/doc', 0, 1, '', '', 1],  // pour modèles PDF
+        ];
+
+        $this->module_parts = [
+            'hooks' => [
+                'invoicecard',
+                'beforePDFCreation',
+                'afterPDFCreation',
+            ],
+            'models' => 1,   
+        ];
+
 
         $this->picto = 'payment';
 
