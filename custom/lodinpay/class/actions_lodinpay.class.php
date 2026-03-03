@@ -1,5 +1,6 @@
 <?php
 
+
 class ActionsLodinpay
 {
     const RTP_API = "https://api-preprod.lodinpay.com/merchant-service/extensions/pay/rtp";
@@ -154,57 +155,76 @@ public function doActions($parameters, &$object, &$action, $hookmanager)
     // ======================================================
     // SHOW LINK ON INVOICE CARD
     // ======================================================
-    public function formObjectOptions($parameters, &$object, &$action, $hookmanager)
-    {
-        global $db;
+public function formObjectOptions($parameters, &$object, &$action, $hookmanager)
+{
+    global $db;
 
-        if (!is_object($object) || $object->element !== 'facture') {
-            return 0;
-        }
-
-        $sql = "SELECT lodinpay_payment_link, lodinpay_order_id
-                FROM ".MAIN_DB_PREFIX."facture
-                WHERE rowid = ".((int) $object->id);
-
-        $resql = $db->query($sql);
-        if ($resql && $db->num_rows($resql)) {
-            $row = $db->fetch_object($resql);
-
-            if (!empty($row->lodinpay_payment_link)) {
-
-                // PAYMENT LINK
-                print '<tr>
-                    <td>LodinPay Payment</td>
-                    <td>
-                        <a class="badge badge-status4"
-                        target="_blank"
-                        href="'.dol_escape_htmltag($row->lodinpay_payment_link).'">
-                        Pay via LodinPay
-                        </a>
-                    </td>
-                </tr>';
-
-                // ORDER ID
-                print '<tr>
-                    <td>LodinPay Order ID</td>
-                    <td>'.dol_escape_htmltag($row->lodinpay_order_id).'</td>
-                </tr>';
-
-                // SYNC BUTTON
-                print '<tr>
-                    <td>LodinPay Status</td>
-                    <td>
-                        <a class="badge badge-status4"
-                        href="'.$_SERVER['PHP_SELF'].'?id='.$object->id.'&action=lodinpay_sync">
-                        Sync payment status
-                        </a>
-                    </td>
-                </tr>';
-            }
-        }
-
+    if (!is_object($object) || $object->element !== 'facture') {
         return 0;
     }
+
+    $sql = "SELECT lodinpay_payment_link, lodinpay_order_id
+            FROM ".MAIN_DB_PREFIX."facture
+            WHERE rowid = ".((int) $object->id);
+
+    $resql = $db->query($sql);
+    if ($resql && $db->num_rows($resql)) {
+        $row = $db->fetch_object($resql);
+
+        if (!empty($row->lodinpay_payment_link)) {
+
+            // PAYMENT LINK
+            print '<tr>
+                <td>LodinPay Payment</td>
+                <td>
+                    <a class="badge badge-status4"
+                    target="_blank"
+                    href="'.dol_escape_htmltag($row->lodinpay_payment_link).'">
+                    Pay via LodinPay
+                    </a>
+                </td>
+            </tr>';
+
+            // ORDER ID
+            print '<tr>
+                <td>LodinPay Order ID</td>
+                <td>'.dol_escape_htmltag($row->lodinpay_order_id).'</td>
+            </tr>';
+
+            // QR CODE
+            $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data='
+                . urlencode($row->lodinpay_payment_link);
+
+            print '<tr>
+                <td>LodinPay QR Code</td>
+                <td>
+                    <a href="'.dol_escape_htmltag($row->lodinpay_payment_link).'" target="_blank">
+                        <img src="'.dol_escape_htmltag($qrUrl).'"
+                             alt="QR Code LodinPay"
+                             width="150"
+                             height="150"
+                             style="border:1px solid #ddd; padding:4px; border-radius:4px;" />
+                    </a>
+                    <br>
+                    <small style="color:#888;">Scannez pour payer</small>
+                </td>
+            </tr>';
+
+            // SYNC BUTTON
+            print '<tr>
+                <td>LodinPay Status</td>
+                <td>
+                    <a class="badge badge-status4"
+                    href="'.$_SERVER['PHP_SELF'].'?id='.$object->id.'&action=lodinpay_sync">
+                    Sync payment status
+                    </a>
+                </td>
+            </tr>';
+        }
+    }
+
+    return 0;
+}
 
     // ======================================================
     // RTP API
@@ -420,32 +440,43 @@ public function doActions($parameters, &$object, &$action, $hookmanager)
         );
     }
 public function beforePDFCreation($parameters, &$object, &$action, $hookmanager)
-    {
-        global $db;
+{
+    global $db;
 
-        // Only invoices
-        if (!is_object($object) || $object->element !== 'facture') {
-            return 0;
-        }
-
-        // Read RTP link DIRECTLY from llx_facture
-        $sql = "SELECT lodinpay_payment_link
-                FROM ".MAIN_DB_PREFIX."facture
-                WHERE rowid = ".((int) $object->id);
-
-        $resql = $db->query($sql);
-        if ($resql && ($row = $db->fetch_object($resql))) {
-
-            if (!empty($row->lodinpay_payment_link)) {
-
-                // Inject into public note (PDF-safe)
-                $object->note_public .= "\n\n"
-                    ."LodinPay payment link:\n"
-                    .$row->lodinpay_payment_link;
-            }
-        }
-
+    if (!is_object($object) || $object->element !== 'facture') {
         return 0;
     }
-   
+
+    $sql = "SELECT lodinpay_payment_link
+            FROM ".MAIN_DB_PREFIX."facture
+            WHERE rowid = ".((int) $object->id);
+
+    $resql = $db->query($sql);
+    if ($resql && ($row = $db->fetch_object($resql))) {
+
+        if (!empty($row->lodinpay_payment_link)) {
+
+            // ✅ AJOUT — Télécharger le QR code et l'encoder en base64
+            $qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='
+                . urlencode($row->lodinpay_payment_link);
+
+            $qrImageData = @file_get_contents($qrApiUrl);
+
+            if ($qrImageData !== false) {
+                // Sauvegarder le QR code en fichier temporaire
+                $tmpQrPath = DOL_DATA_ROOT.'/facture/'.$object->ref.'/'.$object->ref.'_qr.png';
+                file_put_contents($tmpQrPath, $qrImageData);
+
+                // Stocker le chemin dans l'objet pour usage ultérieur (hook PDF)
+                $object->lodinpay_qr_path = $tmpQrPath;
+            }
+
+            // Ajouter le lien en note publique (fallback texte)
+            $object->note_public .= "\n\n"
+                ."Payer en ligne : ".$row->lodinpay_payment_link;
+        }
+    }
+
+    return 0;
+}
 }
