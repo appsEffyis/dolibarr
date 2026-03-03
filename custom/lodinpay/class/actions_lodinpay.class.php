@@ -229,8 +229,8 @@ public function formObjectOptions($parameters, &$object, &$action, $hookmanager)
     // ======================================================
     // RTP API
     // ======================================================
-    private function generateRTP($invoice, $clientId, $secret)
-    {
+private function generateRTP($invoice, $clientId, $secret)
+{
         $amount = number_format($invoice->total_ttc, 2, '.', '');
         $timestamp = gmdate("Y-m-d\TH:i:s.v\Z");
 
@@ -256,8 +256,8 @@ public function formObjectOptions($parameters, &$object, &$action, $hookmanager)
     // ======================================================
     // 🔽 ADDITION START — CREATE INVOICE (ODOO EQUIVALENT)
     // ======================================================
-    private function createInvoice($invoice, $clientId, $secret, $accessLogId)
-    {
+private function createInvoice($invoice, $clientId, $secret, $accessLogId)
+{
         $items = [];
         foreach ($invoice->lines as $line) {
             $items[] = [
@@ -303,8 +303,8 @@ public function formObjectOptions($parameters, &$object, &$action, $hookmanager)
     // ======================================================
     // 🔽 ADDITION — ATTACH PDF
     // ======================================================
-    private function attachInvoicePdf($invoice, $backendInvoiceId, $clientId, $secret)
-    {
+private function attachInvoicePdf($invoice, $backendInvoiceId, $clientId, $secret)
+{
         $pdfPath = DOL_DATA_ROOT."/facture/".$invoice->ref."/".$invoice->ref.".pdf";
         if (!file_exists($pdfPath)) {
             throw new Exception("Invoice PDF not found");
@@ -338,7 +338,7 @@ public function formObjectOptions($parameters, &$object, &$action, $hookmanager)
     // ======================================================
     // 🔽 ADDITION — SYNC STATUS
     // ======================================================
-   private function syncPaymentStatus($invoice, $clientId, $secret)
+private function syncPaymentStatus($invoice, $clientId, $secret)
     {
         global $db;
 
@@ -387,7 +387,7 @@ public function formObjectOptions($parameters, &$object, &$action, $hookmanager)
     // ======================================================
     // SHARED
     // ======================================================
-    private function call($url, $headers, $body)
+private function call($url, $headers, $body)
     {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -441,7 +441,7 @@ public function formObjectOptions($parameters, &$object, &$action, $hookmanager)
     }
 
 
-    public function beforePDFCreation($parameters, &$object, &$action, $hookmanager)
+public function beforePDFCreation($parameters, &$object, &$action, $hookmanager)
 {
     global $db;
 

@@ -79,20 +79,21 @@ class modLodinpay extends DolibarrModules
 
     public function init($options = '')
     {
-        // ✅ Chemin correct vers le SQL
+        
         $result = $this->_load_tables('/lodinpay/sql/');
         if ($result < 0) return -1;
-
-        // ✅ Insérer le modèle dans llx_document_model si absent
+        $this->db->query(
+        "DELETE FROM ".MAIN_DB_PREFIX."extrafields
+         WHERE elementtype = 'facture'
+         AND name IN ('lodinpay_order_id', 'lien_de_paiement_rtp', 'lodinpay_payment_link')"
+    );
         $this->_registerPDFModel();
-
         return parent::init($options);
     }
 
     public function remove($options = '')
     {
-        // Restaurer sponge comme modèle par défaut à la désactivation
-        $this->_restoreDefaultPDFModel();
+        $this->_restoreDefaultPDFModel();   
         return parent::remove($options);
     }
 
