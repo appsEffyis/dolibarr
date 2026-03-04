@@ -25,7 +25,7 @@ class InterfaceLodinPay
             return 0;
         }
 
-        require_once DOL_DOCUMENT_ROOT.'/custom/lodinpay/class/lodinpay.class.php';
+        dol_include_once('/lodinpay/class/lodinpay.class.php');
 
         // ── Vérification devise (équivalent : if doc.currency != "EUR") ────────
         $currency = $object->multicurrency_code ?: $conf->currency;
