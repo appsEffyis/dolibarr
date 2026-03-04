@@ -11,7 +11,7 @@ class modLodinpay extends DolibarrModules
         $this->db = $db;
 
         // Unique ID from Dolibarr marketplace range
-        $this->numero        = 500001;
+        $this->numero        =  185381;
 
         $this->rights_class  = 'lodinpay';
         $this->family        = 'financial';
