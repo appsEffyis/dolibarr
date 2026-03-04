@@ -1,0 +1,14 @@
+ChangeLog LodinPay Dolibarr module
+
+v1.0.0 - 2026-03-03
+- Initial release
+- Automatic RTP payment link generation on invoice validation
+- QR code display on invoice card
+- Professional PDF model with clickable payment button and QR code
+- Payment status synchronization via Sync button
+- Auto mark invoice as Paid on payment confirmation
+- Invoice PDF automatically sent to LodinPay backend
+- lodinpay PDF model set as default on module activation
+- Restores previous PDF model on module deactivation
+- French and English translations included
+- Compatible with Dolibarr 17.x to 22.x

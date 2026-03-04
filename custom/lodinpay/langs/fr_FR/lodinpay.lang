@@ -1,0 +1,35 @@
+# Traductions françaises pour le module LodinPay
+# Copyright (C) 2026 LodinPay
+#
+LodinPayModule=LodinPay
+LodinPayModuleDesc=Générez des liens de paiement instantané sur vos factures avec LodinPay. Vos clients paient en ligne via 20+ banques européennes.
+
+# Setup
+LodinPayClientId=Client ID LodinPay
+LodinPayClientSecret=Client Secret LodinPay
+LodinPayClientIdDesc=Votre identifiant client fourni par LodinPay
+LodinPayClientSecretDesc=Votre clé secrète fournie par LodinPay
+LodinPaySettings=Configuration LodinPay
+LodinPayAPISettings=Paramètres API
+
+# Fiche facture
+LodinPayPayment=Paiement LodinPay
+LodinPayOrderId=Order ID LodinPay
+LodinPayQRCode=QR Code LodinPay
+LodinPayStatus=Statut LodinPay
+LodinPayPaymentLink=Lien de paiement RTP
+PayViaLodinPay=Payer via LodinPay
+SyncPaymentStatus=Synchroniser le statut
+ScanToPay=Scannez pour payer
+
+# Messages
+LodinPayInvoiceMarkedPaid=Facture marquée comme PAYÉE (LodinPay)
+LodinPayMissingCredentials=Identifiants LodinPay manquants. Veuillez configurer le module.
+LodinPayError=Erreur LodinPay
+
+# PDF
+PayNow=Payer maintenant
+PayInvoiceOnline=Payez votre facture en ligne
+PayFastSecure=Rapide - Sécurisé - 20+ banques européennes
+ScannerToPay=Scanner pour payer
+PayWithLodinPay=Payer avec LodinPay

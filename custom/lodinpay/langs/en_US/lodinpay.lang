@@ -1,0 +1,35 @@
+# English translations for LodinPay module
+# Copyright (C) 2026 LodinPay
+#
+LodinPayModule=LodinPay
+LodinPayModuleDesc=Generate instant payment links on invoices using LodinPay. Customers can pay online via 20+ European banks.
+
+# Setup
+LodinPayClientId=LodinPay Client ID
+LodinPayClientSecret=LodinPay Client Secret
+LodinPayClientIdDesc=Your client identifier provided by LodinPay
+LodinPayClientSecretDesc=Your secret key provided by LodinPay
+LodinPaySettings=LodinPay Configuration
+LodinPayAPISettings=API Settings
+
+# Invoice card
+LodinPayPayment=LodinPay Payment
+LodinPayOrderId=LodinPay Order ID
+LodinPayQRCode=LodinPay QR Code
+LodinPayStatus=LodinPay Status
+LodinPayPaymentLink=RTP Payment Link
+PayViaLodinPay=Pay via LodinPay
+SyncPaymentStatus=Sync payment status
+ScanToPay=Scan to pay
+
+# Messages
+LodinPayInvoiceMarkedPaid=Invoice marked as PAID (LodinPay)
+LodinPayMissingCredentials=LodinPay credentials missing. Please configure the module.
+LodinPayError=LodinPay Error
+
+# PDF
+PayNow=Pay now
+PayInvoiceOnline=Pay your invoice online
+PayFastSecure=Fast - Secure - 20+ European banks
+ScannerToPay=Scan to pay
+PayWithLodinPay=Pay with LodinPay

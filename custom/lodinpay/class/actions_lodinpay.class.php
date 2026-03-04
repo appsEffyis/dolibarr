@@ -3,12 +3,12 @@
 
 class ActionsLodinpay
 {
-    const RTP_API = "https://api-preprod.lodinpay.com/merchant-service/extensions/pay/rtp";
+    const RTP_API = "https://api.lodinpay.com/merchant-service/extensions/pay/rtp";
     const EXTENSION_CODE = "DOLIBARR";
 
     // 🔽 ADDITION: NEW APIS (NO IMPACT)
-    const INVOICE_API    = "https://api-preprod.lodinpay.com/merchant-service/extensions/invoices";
-    const RTP_STATUS_API = "https://api-preprod.lodinpay.com/merchant-service/extensions/pay/rtp/check-status";
+    const INVOICE_API    = "https://api.lodinpay.com/merchant-service/extensions/invoices";
+    const RTP_STATUS_API = "https://api.lodinpay.com/merchant-service/extensions/pay/rtp/check-status";
     // 🔼 ADDITION END
 
     // ======================================================
